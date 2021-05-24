@@ -1,4 +1,4 @@
-package util
+package main
 
 type PluginBaseInfoNode struct {
 	Name     string         // 插件名称

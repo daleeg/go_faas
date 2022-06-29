@@ -11,6 +11,6 @@ import (
 
 func main() {
 	cmd.Execute()
-	util.DoInvokePlugin(util.PluginItems, []interface{}{"world"})
+	util.DoInvokePlugin("helloPlugin.hello.PrintNowTime", []interface{}{"world"})
 	fmt.Println("Process Stop ========")
 }

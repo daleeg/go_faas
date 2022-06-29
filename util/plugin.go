@@ -1,10 +1,13 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"path"
+	"path/filepath"
 	"plugin"
 	"reflect"
+	"strings"
 	"unsafe"
 )
 
@@ -12,6 +15,33 @@ type PluginItem struct {
 	Name           string
 	PluginBaseInfo *PluginBaseInfoNode
 	PluginItem     *plugin.Plugin
+}
+
+type Result interface {
+	GetCode() error
+	GetData() interface{}
+}
+
+type ErrorResult struct {
+	err error
+}
+
+func (e ErrorResult) GetCode() error {
+	return e.err
+}
+func (e ErrorResult) GetData() interface{} {
+	return nil
+}
+
+type SuccessResult struct {
+	data interface{}
+}
+
+func (s SuccessResult) GetCode() error {
+	return nil
+}
+func (s SuccessResult) GetData() interface{} {
+	return s.data
 }
 
 // 所有插件必须实现该方法
@@ -22,7 +52,7 @@ type eface struct {
 }
 
 // LoadAllPlugin 将会过滤一次传入的targetFile,同时将so后缀的文件装载，并返回一个插件信息集合
-func LoadAllPlugin(targetFile []string) []PluginItem {
+func LoadAllPlugin(targetFile []string, collection map[string]PluginItem) []PluginItem {
 	var res []PluginItem
 	index := 1
 	for _, fileItem := range targetFile {
@@ -58,23 +88,28 @@ func LoadAllPlugin(targetFile []string) []PluginItem {
 				PluginBaseInfo: baseInfo,
 				PluginItem:     pluginFile,
 			}
-			res = append(res, pluginInfo)
+			filename := filepath.Base(fileItem)
+			key := fmt.Sprintf("%s.%s.%s", strings.TrimSuffix(filename, filepath.Ext(filename)),
+				baseInfo.Name,
+				pluginInfo.PluginBaseInfo.Function.Name)
+			collection[key] = pluginInfo
 		}
 	}
 	return res
 }
 
 // DoInvokePlugin 会根据当前状态执行插件调用
-func DoInvokePlugin(pluginsItems []PluginItem, args []interface{}) {
-	for _, pluginItem := range pluginsItems {
+func DoInvokePlugin(pluginFuncName string, args []interface{}) Result {
+	fmt.Println(pluginFuncName)
+	fmt.Println(pluginCollection)
+	if pluginItem, ok := pluginCollection[pluginFuncName]; ok {
 		// 判断流程
-
 		funcName := pluginItem.PluginBaseInfo.Function.Name
 		funcItem, err := pluginItem.PluginItem.Lookup(funcName)
-
+		fmt.Println(funcName)
 		if err != nil {
 			fmt.Println("Can't find target func in [" + pluginItem.Name + "].")
-			continue
+			return ErrorResult{err}
 		}
 		fun := reflect.ValueOf(funcItem)
 		params := &pluginItem.PluginBaseInfo.Function.Params
@@ -89,17 +124,20 @@ func DoInvokePlugin(pluginsItems []PluginItem, args []interface{}) {
 				break
 			}
 		}
-		fun.Call(in)
-		break
+		ret := fun.Call(in)
+		return SuccessResult{ret}
 	}
+	print("Can't find [" + pluginFuncName + "]")
+	return ErrorResult{errors.New("Can't find [" + pluginFuncName + "]")}
 }
 
-var PluginItems []PluginItem
+var pluginCollection map[string]PluginItem /*创建集合 */
 
 func init() {
 	// 读取plugin文件夹
 	pluginsFiles := FindFile("plugin")
-	PluginItems = LoadAllPlugin(pluginsFiles)
-	// fmt.Println(PluginItems)
+	pluginCollection = make(map[string]PluginItem)
+	LoadAllPlugin(pluginsFiles, pluginCollection)
+	fmt.Println(pluginCollection)
 	fmt.Println("Process On ==========")
 }

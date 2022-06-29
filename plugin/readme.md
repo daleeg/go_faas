@@ -1,1 +1,1 @@
- go build --buildmode=plugin -o helloPlugin.so common.go helloPlugin.go
+ go build --buildmode=plugin -o plugin/hello/helloPlugin.so plugin/hello/helloPlugin.go

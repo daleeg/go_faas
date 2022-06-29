@@ -1,4 +1,4 @@
-package main
+package plugin
 
 type PluginBaseInfoNode struct {
 	Name     string         // 插件名称
@@ -13,5 +13,5 @@ type PluginFunction struct {
 
 type FuncParam struct {
 	Type string
-	key  string
+	Key  string
 }

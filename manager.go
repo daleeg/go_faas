@@ -3,14 +3,15 @@ package main
 import (
 	"fmt"
 	"go_faas/cmd"
-
-	// _ "go_restframework/util"
 	"go_faas/util"
+
 	// "plugin"
 )
 
 func main() {
-	cmd.Execute()
-	util.DoInvokePlugin("helloPlugin.hello.PrintNowTime", []interface{}{"world"})
+	cmd.Start()
+	util.DoInvokePlugin("helloPlugin.hello.PluginPrintNowTime", []interface{}{"world"})
+	util.DoInvokePlugin("rsaPlugin.rsa.PluginRSAGenKey", []interface{}{
+		4096, "privateKey.pem", "publicKey.pem"})
 	fmt.Println("Process Stop ========")
 }

@@ -30,8 +30,8 @@ release:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO_BUILD) -o ${TARGET_BIN} -v ./${MAIN_FILE}
 
 build-plugin:
-	$(foreach plugin, $(PLUGIN_MODULE), $(GO_BUILD_PLUGIN) -o $(TARGET)/$(plugin).so  $(plugin).go)
-	$(foreach plugin, $(PLUGIN_MODULE), $(COPY) $(TARGET)/$(plugin).so $(plugin).so)
+	$(foreach plugin, $(PLUGIN_MODULE), $(GO_BUILD_PLUGIN) -o $(TARGET)/$(plugin).so  $(plugin).go;)
+	$(foreach plugin, $(PLUGIN_MODULE), $(COPY) $(TARGET)/$(plugin).so $(plugin).so;)
 
 tool:
 	$(GO_VET) ./...
@@ -42,7 +42,7 @@ lint:
 
 clean:
 	@echo ++++ clean start ++++
-	$(foreach plugin, $(PLUGIN_MODULE), $(REMOVE) ${plugin}.so)
+	$(foreach plugin, $(PLUGIN_MODULE), $(REMOVE) ${plugin}.so;)
 	$(REMOVE) ${TARGET}
 	$(GO_CLEAN) -i .
 	@echo ---- clean end ----

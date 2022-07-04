@@ -8,20 +8,28 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	cliName        = "go_faas"
+	cliDescription = "A simple command line client for go_faas"
+)
+
 var cfgFile string
 
 var rootCmd = &cobra.Command{
-	Use:   "go_faas",
-	Short: "go_faas",
-	Long:  `go_faas`,
+	Use:   cliName,
+	Short: cliDescription,
+	Long:  cliDescription,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("go faas success ")
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
+// Start adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
+func Start() {
+	rootCmd.SetUsageFunc(usageFunc)
+	// Make help just show the usage
+	rootCmd.SetHelpTemplate(`{{.UsageString}}`)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -53,4 +61,8 @@ func initConfig() {
 		// fmt.Println("mysql password: ", viper.Get("mysql.password"))
 		// fmt.Println("mysql port: ", viper.Get("mysql.port"))
 	}
+}
+
+func usageFunc(c *cobra.Command) error {
+	return nil
 }

@@ -143,7 +143,7 @@ func LoadAllPlugin(targetFile []string, collection map[string]PluginItem) []Plug
 }
 
 // DoInvokePlugin 会根据当前状态执行插件调用
-func DoInvokePlugin(pluginFuncName string, args []interface{}) Result {
+func DoInvokePlugin(pluginFuncName string, args ...interface{}) Result {
 	fmt.Println(pluginFuncName)
 	fmt.Println(pluginCollection)
 	if pluginItem, ok := pluginCollection[pluginFuncName]; ok {

@@ -8,7 +8,6 @@ import (
 	"plugin"
 	"reflect"
 	"strings"
-	"unsafe"
 )
 
 type PluginItem struct {
@@ -44,11 +43,21 @@ func (s SuccessResult) GetData() interface{} {
 	return s.data
 }
 
-// 所有插件必须实现该方法
-const BaseInfo = "PluginBaseInfo"
+// PluginPackageName 所有插件必须实现该方法
+const PluginPackageName = "PackageName"
 
-type eface struct {
-	typ, val unsafe.Pointer
+
+func listPluginMethod(p *plugin.Plugin, pluginNamePre string) (names []string) {
+	pluginObj := reflect.ValueOf(*p)
+	syms := pluginObj.FieldByName("syms")
+	symsNames := syms.MapKeys()
+	for _, symsName := range symsNames {
+		name := symsName.String()
+		if strings.HasPrefix(name, pluginNamePre) {
+			names = append(names, name)
+		}
+	}
+	return
 }
 
 // LoadAllPlugin 将会过滤一次传入的targetFile,同时将so后缀的文件装载，并返回一个插件信息集合
@@ -65,34 +74,69 @@ func LoadAllPlugin(targetFile []string, collection map[string]PluginItem) []Plug
 				fmt.Println("An error occurred while load plugin : [" + fileItem + "]")
 				fmt.Println(err)
 			}
-			//查找指定函数或符号
-			targetFunc, err := pluginFile.Lookup(BaseInfo)
+
+			packageNameType, err := pluginFile.Lookup(PluginPackageName)
 			if err != nil {
-				fmt.Println("An error occurred while search target info : [" + fileItem + "]")
+				fmt.Println("An error occurred while search target info : [" + PluginPackageName + "]")
 				fmt.Println(err)
 				continue
 			}
-
-			baseInfo := (*PluginBaseInfoNode)((*eface)(unsafe.Pointer(&targetFunc)).val)
-			// baseInfo, ok := targetFunc.(*PluginBaseInfoNode)
-			// if !ok {
-			// 	fmt.Println("Can find base info.")
-			// 	continue
-			// }
-			// fmt.Println(baseInfo)
-			// fmt.Println(4444)
-
-			//采集插件信息
-			pluginInfo := PluginItem{
-				Name:           fileItem,
-				PluginBaseInfo: baseInfo,
-				PluginItem:     pluginFile,
+			packageName, ok := packageNameType.(*string)
+			if !ok {
+				fmt.Println("Can find packageName ", packageNameType)
+				continue
 			}
+
+			pluginMethods := listPluginMethod(pluginFile, "Plugin")
 			filename := filepath.Base(fileItem)
-			key := fmt.Sprintf("%s.%s.%s", strings.TrimSuffix(filename, filepath.Ext(filename)),
-				baseInfo.Name,
-				pluginInfo.PluginBaseInfo.Function.Name)
-			collection[key] = pluginInfo
+			for _, pluginMethodName := range pluginMethods {
+				fmt.Println("Plugin Method ", pluginMethodName)
+				pluginMethod, err := pluginFile.Lookup(pluginMethodName)
+				if err != nil {
+					fmt.Println("An error occurred while search target info : [" + pluginMethodName + "]")
+					fmt.Println(err)
+					continue
+				}
+
+				fmt.Println("Plugin Method ", pluginMethodName)
+				method := reflect.ValueOf(pluginMethod)
+
+				if method.Kind() != reflect.Func {
+					fmt.Println(pluginMethod, " is not function")
+					continue
+				}
+
+				inParam := method.Type()
+				fmt.Println("Plugin Method inParam", inParam)
+				parameters := make([]reflect.Type, 0, inParam.NumIn())
+				for i := 0; i < method.Type().NumIn(); i++ {
+					arg := inParam.In(i)
+					fmt.Printf("argument %d is %s[%s] type \n", i, arg.Kind(), arg.Name())
+					parameters = append(parameters, arg)
+				}
+
+				baseInfo := PluginBaseInfoNode{
+					Name:     pluginMethodName,
+					Desc:     pluginMethodName,
+					Function: method,
+					Params:   parameters,
+				}
+
+				fmt.Println("baseInfo ", baseInfo)
+				pluginInfo := PluginItem{
+					Name:           fileItem,
+					PluginBaseInfo: &baseInfo,
+					PluginItem:     pluginFile,
+				}
+				fmt.Println("pluginInfo ", pluginInfo)
+				key := fmt.Sprintf("%s.%s.%s", strings.TrimSuffix(filename, filepath.Ext(filename)),
+					*packageName,
+					baseInfo.Name)
+				fmt.Println("key ", key)
+				pluginCollection[key] = pluginInfo
+
+			}
+			
 		}
 	}
 	return res
@@ -104,22 +148,16 @@ func DoInvokePlugin(pluginFuncName string, args []interface{}) Result {
 	fmt.Println(pluginCollection)
 	if pluginItem, ok := pluginCollection[pluginFuncName]; ok {
 		// 判断流程
-		funcName := pluginItem.PluginBaseInfo.Function.Name
-		funcItem, err := pluginItem.PluginItem.Lookup(funcName)
-		fmt.Println(funcName)
-		if err != nil {
-			fmt.Println("Can't find target func in [" + pluginItem.Name + "].")
-			return ErrorResult{err}
-		}
-		fun := reflect.ValueOf(funcItem)
-		params := &pluginItem.PluginBaseInfo.Function.Params
+		fun := pluginItem.PluginBaseInfo.Function
+
+		params := &pluginItem.PluginBaseInfo.Params
 		in := make([]reflect.Value, len(*params))
 		for k, param := range *params {
-			switch param.Type {
-			case "string":
+			switch param {
+			case reflect.TypeOf(string("")):
 				in[k] = reflect.ValueOf(args[k].(string))
 				break
-			case "int":
+			case reflect.TypeOf(int(0)):
 				in[k] = reflect.ValueOf(args[k].(int))
 				break
 			}
@@ -127,9 +165,17 @@ func DoInvokePlugin(pluginFuncName string, args []interface{}) Result {
 		ret := fun.Call(in)
 		return SuccessResult{ret}
 	}
+
 	print("Can't find [" + pluginFuncName + "]")
 	return ErrorResult{errors.New("Can't find [" + pluginFuncName + "]")}
 }
+
+func ShowAllPlugins() {
+	for name, pluginItem := range pluginCollection {
+		fmt.Println(name, pluginItem)
+	}
+}
+
 
 var pluginCollection map[string]PluginItem /*创建集合 */
 

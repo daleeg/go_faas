@@ -141,6 +141,7 @@ func LoadAllPlugin(targetFile []string, collection map[string]PluginItem) []Plug
 // DoInvokePlugin 会根据当前状态执行插件调用
 func DoInvokePlugin(pluginFuncName string, args ...interface{}) Result {
 	logger.Infoln(pluginFuncName)
+
 	if pluginItem, ok := pluginCollection[pluginFuncName]; ok {
 		// 判断流程
 		fun := pluginItem.PluginBaseInfo.Function

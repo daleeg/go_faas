@@ -9,7 +9,7 @@ var (
 	PackageName = "hello"
 )
 // PluginPrintNowTime 打印当前时间
-func PluginPrintNowTime(world string) {
+func PluginPrintNowTime(world string) error {
 	nowSecond := time.Now().Second()
 	if nowSecond%2 == 0 {
 		fmt.Println("Hello,", world)
@@ -17,4 +17,5 @@ func PluginPrintNowTime(world string) {
 		fmt.Println("Get out,", world)
 	}
 	fmt.Println(time.Now())
+	return nil
 }

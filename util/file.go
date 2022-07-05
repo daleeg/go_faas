@@ -1,7 +1,6 @@
 package util
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path"
 )
@@ -9,8 +8,8 @@ import (
 func FindFile(directoryPath string) []string {
 	baseFile, err := ioutil.ReadDir(directoryPath)
 	if err != nil {
-		fmt.Println("An error occurred while open file :[" + directoryPath + "] .")
-		fmt.Println(err)
+		logger.Errorln("An error occurred while open file :[" + directoryPath + "] .")
+		logger.Errorln(err)
 		return nil
 	}
 	var res []string

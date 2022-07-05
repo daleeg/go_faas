@@ -13,7 +13,9 @@ const (
 	cliDescription = "A simple command line client for go_faas"
 )
 
-var cfgFile string
+var (
+	cfgFile string
+)
 
 var rootCmd = &cobra.Command{
 	Use:   cliName,

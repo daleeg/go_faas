@@ -1,0 +1,6 @@
+Name: hello.rpc
+ListenOn: 127.0.0.1:9090
+Etcd:
+  Hosts:
+    - http://127.0.0.1:12379
+  Key: hello.rpc

@@ -21,11 +21,13 @@ var (
 
 func callPlugin(cmd *cobra.Command, args []string) {
 	var pluginParams []interface{}
-	if err := json.Unmarshal([]byte(params), &pluginParams); err != nil {
-		fmt.Println(err)
-		panic("params为json类型")
+	if params != "" {
+		if err := json.Unmarshal([]byte(params), &pluginParams); err != nil {
+			fmt.Println(err)
+			panic("params为json类型")
+		}
 	}
-	fmt.Println("Call PluginMethod: " + pluginMethod + " params: ", pluginParams)
+	fmt.Println("Call PluginMethod: "+pluginMethod+" params: ", pluginParams)
 	ret := util.DoInvokePlugin(pluginMethod, pluginParams...)
 	if ret.GetCode() != nil {
 		fmt.Println("Call PluginMethod: " + pluginMethod + " failed")

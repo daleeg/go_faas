@@ -10,18 +10,26 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 )
-
 
 // PluginPackageName 所有插件必须实现该方法
 const PluginPackageName = "PackageName"
 
-var (
-	pluginCollection map[string]PluginItem /*创建集合 */
-	logger  *logrus.Logger
-)
+type PluginServer struct {
+	pluginCollection sync.Map // map[string]*service
+	logger           *logrus.Logger
+}
 
+// NewPluginServer returns a new Server.
+func NewPluginServer() *PluginServer {
+	return &PluginServer{
+		logger: GetLogger("pluginServer"),
+	}
+}
 
+// DefaultServer is the default instance of *Server.
+var DefaultServer = NewPluginServer()
 
 func listPluginMethod(p *plugin.Plugin, pluginNamePre string) (names []string) {
 	pluginObj := reflect.ValueOf(*p)
@@ -37,29 +45,28 @@ func listPluginMethod(p *plugin.Plugin, pluginNamePre string) (names []string) {
 }
 
 // LoadAllPlugin 将会过滤一次传入的targetFile,同时将so后缀的文件装载，并返回一个插件信息集合
-func LoadAllPlugin(targetFile []string, collection map[string]PluginItem) []PluginItem {
-	var res []PluginItem
+func (s *PluginServer) LoadAllPlugin(targetFile []string) {
 	index := 1
 	for _, fileItem := range targetFile {
 		// 过滤插件文件
 		if path.Ext(fileItem) == ".so" {
-			logger.Infoln("load plugin", index, ": ", fileItem)
+			s.logger.Infoln("load plugin", index, ": ", fileItem)
 			index += 1
 			pluginFile, err := plugin.Open(fileItem)
 			if err != nil {
-				logger.Errorln("An error occurred while load plugin : [" + fileItem + "]")
-				logger.Errorln(err)
+				s.logger.Errorln("An error occurred while load plugin : [" + fileItem + "]")
+				s.logger.Errorln(err)
 			}
 
 			packageNameType, err := pluginFile.Lookup(PluginPackageName)
 			if err != nil {
-				logger.Errorln("An error occurred while search target info : [" + PluginPackageName + "]")
-				logger.Errorln(err)
+				s.logger.Errorln("An error occurred while search target info : [" + PluginPackageName + "]")
+				s.logger.Errorln(err)
 				continue
 			}
 			packageName, ok := packageNameType.(*string)
 			if !ok {
-				logger.Errorln("Can find packageName ", packageNameType)
+				s.logger.Errorln("Can find packageName ", packageNameType)
 				continue
 			}
 
@@ -68,46 +75,46 @@ func LoadAllPlugin(targetFile []string, collection map[string]PluginItem) []Plug
 			for _, pluginMethodName := range pluginMethods {
 				pluginMethod, err := pluginFile.Lookup(pluginMethodName)
 				if err != nil {
-					logger.Errorln("An error occurred while search target info : [" + pluginMethodName + "]")
-					logger.Errorln(err)
+					s.logger.Errorln("An error occurred while search target info : [" + pluginMethodName + "]")
+					s.logger.Errorln(err)
 					continue
 				}
 
-				logger.Infoln("Plugin Method ", pluginMethodName)
+				s.logger.Infoln("Plugin Method ", pluginMethodName)
 				method := reflect.ValueOf(pluginMethod)
 
 				if method.Kind() != reflect.Func {
-					logger.Errorln(pluginMethod, " is not function")
+					s.logger.Errorln(pluginMethod, " is not function")
 					continue
 				}
 
 				methodParam := method.Type()
-				numIn :=  methodParam.NumIn()
+				numIn := methodParam.NumIn()
 				inParameters := make([]reflect.Type, 0, numIn)
 				for i := 0; i < numIn; i++ {
 					arg := methodParam.In(i)
-					logger.Infoln("argument %d is %s[%s] type \n", i, arg.Kind(), arg.Name())
+					s.logger.Infoln("argument %d is %s[%s] type \n", i, arg.Kind(), arg.Name())
 					inParameters = append(inParameters, arg)
 				}
 
 				outReturns := make([]reflect.Type, 0, methodParam.NumOut())
-				numOut :=  methodParam.NumOut()
+				numOut := methodParam.NumOut()
 				if numOut < 1 {
-					logger.Errorln("outs length must greater than 0")
+					s.logger.Errorln("outs length must greater than 0")
 					continue
 				}
 
 				for i := 0; i < numOut; i++ {
 					arg := methodParam.Out(i)
-					logger.Infoln("out %d is %s[%s] type \n", i, arg.Kind(), arg.Name())
+					s.logger.Infoln("out %d is %s[%s] type \n", i, arg.Kind(), arg.Name())
 					outReturns = append(outReturns, arg)
 				}
 				if !outReturns[len(outReturns)-1].AssignableTo(reflect.TypeOf((*error)(nil)).Elem()) {
-					logger.Errorln("last output must be error")
+					s.logger.Errorln("last output must be error")
 					continue
 				}
 				if !outReturns[len(outReturns)-1].Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-					logger.Errorln("last output must be error")
+					s.logger.Errorln("last output must be error")
 					continue
 				}
 
@@ -116,33 +123,38 @@ func LoadAllPlugin(targetFile []string, collection map[string]PluginItem) []Plug
 					Desc:     pluginMethodName,
 					Function: method,
 					Params:   inParameters,
-					Returns: outReturns,
+					Returns:  outReturns,
 				}
 
-				logger.Infoln("baseInfo ", baseInfo)
+				s.logger.Infoln("baseInfo ", baseInfo)
 				pluginInfo := PluginItem{
 					Name:           fileItem,
 					PluginBaseInfo: &baseInfo,
 				}
-				logger.Infoln("pluginInfo ", pluginInfo)
+				s.logger.Infoln("pluginInfo ", pluginInfo)
 				key := fmt.Sprintf("%s.%s.%s", strings.TrimSuffix(filename, filepath.Ext(filename)),
 					*packageName,
 					baseInfo.Name)
-				logger.Infoln("key ", key)
-				pluginCollection[key] = pluginInfo
+				s.logger.Infoln("key ", key)
 
+				if _, dup := s.pluginCollection.LoadOrStore(key, pluginInfo); dup {
+					s.logger.Errorln("ready defined: " + key)
+					s.logger.Errorln(err)
+					continue
+				}
 			}
-			
+
 		}
 	}
-	return res
 }
 
 // DoInvokePlugin 会根据当前状态执行插件调用
-func DoInvokePlugin(pluginFuncName string, args ...interface{}) Result {
-	logger.Infoln(pluginFuncName)
-	if pluginItem, ok := pluginCollection[pluginFuncName]; ok {
+func (s *PluginServer) DoInvokePlugin(pluginFuncName string, args ...interface{}) Result {
+	s.logger.Infoln(pluginFuncName)
+
+	if pluginNode, ok := s.pluginCollection.Load(pluginFuncName); ok {
 		// 判断流程
+		pluginItem := pluginNode.(PluginItem)
 		fun := pluginItem.PluginBaseInfo.Function
 
 		params := &pluginItem.PluginBaseInfo.Params
@@ -177,19 +189,24 @@ func DoInvokePlugin(pluginFuncName string, args ...interface{}) Result {
 	return ErrorResult{errors.New("Can't find [" + pluginFuncName + "]")}
 }
 
-func ShowAllPlugins() {
-	for name, pluginItem := range pluginCollection {
-		fmt.Println(name, pluginItem)
-	}
+func (s *PluginServer) ShowAllPlugins() {
+	s.pluginCollection.Range(
+		func(name, pluginNode interface{}) bool {
+			fmt.Println(name.(string), pluginNode.(PluginItem))
+			return true
+		})
 }
 
+func DoInvokePlugin(pluginFuncName string, args ...interface{}) Result {
+	return DefaultServer.DoInvokePlugin(pluginFuncName, args...)
+}
 
+func ShowAllPlugins() {
+	DefaultServer.ShowAllPlugins()
+}
 
 func init() {
 	// 读取plugin文件夹
-	logger = GetLogger("util")
 	pluginsFiles := FindFile("plugin")
-	pluginCollection = make(map[string]PluginItem)
-	LoadAllPlugin(pluginsFiles, pluginCollection)
-	logger.Infoln(pluginCollection)
+	DefaultServer.LoadAllPlugin(pluginsFiles)
 }

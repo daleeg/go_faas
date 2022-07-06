@@ -1,8 +1,13 @@
 package util
 
 import (
+	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"path"
+)
+
+var (
+	logger *logrus.Logger
 )
 
 func FindFile(directoryPath string) []string {
@@ -23,4 +28,8 @@ func FindFile(directoryPath string) []string {
 		}
 	}
 	return res
+}
+
+func init() {
+	logger = GetLogger("util")
 }
